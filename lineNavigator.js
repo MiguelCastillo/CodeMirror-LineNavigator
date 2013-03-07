@@ -21,8 +21,8 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  */
-
-
+ 
+ 
  (function() {
 
 
@@ -47,7 +47,7 @@
       // It will actually cause problems when going to mac, which has different
       // key mapping.
       // I am just leaving it for now as a reference to register new mapping
-      // so that I can later support adding custom mappings.
+      // so that I can later support add custom mappings later.
       //
       /*
       cm.addKeyMap({
