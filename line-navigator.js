@@ -42,6 +42,10 @@
       CodeMirror.commands.goWordLeft = navigateLineLeft;
       CodeMirror.commands.goWordRight = navigateLineRight;
 
+	  // Add scrollLineUp and scrollLineDown as commands in code mirror
+	  CodeMirror.commands.scrollLineUp = scrollLineUp;
+	  CodeMirror.commands.scrollLineDown = scrollLineDown;
+
       cm.addKeyMap({
         name: "lineNavigator",
         "Ctrl-Down": scrollLineDown,
