@@ -42,20 +42,11 @@
       CodeMirror.commands.goWordLeft = navigateLineLeft;
       CodeMirror.commands.goWordRight = navigateLineRight;
 
-      // Since we are replacing goWordLeft and goWordRight which are already
-      // bound to the keys below, I really don't need to setup a new key map.
-      // It will actually cause problems when going to mac, which has different
-      // key mapping.
-      // I am just leaving it for now as a reference to register new mapping
-      // so that I can later support adding custom mappings.
-      //
-      /*
       cm.addKeyMap({
         name: "lineNavigator",
-        "Ctrl-Right": navigateLineRight,
-        "Ctrl-Left": navigateLineLeft
+        "Ctrl-Down": scrollLineDown,
+        "Ctrl-Up": scrollLineUp
       });
-      */
     }
     else {
      cm.removeKeyMap("lineNavigator");
@@ -66,7 +57,6 @@
     }
 
   });
-
 
 
   var navigateDirection = {
@@ -81,11 +71,36 @@
   };
 
 
+  function scrollLineUp(cm) {
+    var pos = cm.getCursor(), line = cm.lineInfo(pos.line);
+    var scrollInfo = cm.getScrollInfo();
+    var lineFromFirstLine = Math.round((scrollInfo.top + scrollInfo.clientHeight)/line.handle.height);
+    cm.scrollTo(0, scrollInfo.top - line.handle.height);
+
+    // A little fuzzy math here to conpensate for lines above and below...
+    if ( lineFromFirstLine < pos.line + 2 ){
+      cm.setCursor(lineFromFirstLine - 2, 0);
+    }
+  }
+
+
+  function scrollLineDown(cm) {
+    var pos = cm.getCursor(), line = cm.lineInfo(pos.line);
+    var scrollInfo = cm.getScrollInfo();
+    var lineFromFirstLine = Math.round(scrollInfo.top/line.handle.height);
+    cm.scrollTo(0, scrollInfo.top + line.handle.height);
+
+    if ( lineFromFirstLine >= pos.line ){
+      cm.setCursor(lineFromFirstLine + 1, 0);
+    }
+  }
+
+
   /**
   *  Line Navigation logic.  There are some parts that have been extracted out of
   *  the implementation to goWordLeft and goWordRight.
   */
-  function navigateLineRight(cm, dirName) {
+  function navigateLineRight(cm) {
     var dir = navigateDirection.right;
     var currPos = { line: -1 }, line;
     var characters = new charHandlers();
