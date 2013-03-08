@@ -78,8 +78,8 @@
     cm.scrollTo(0, scrollInfo.top - line.handle.height);
 
     // A little fuzzy math here to conpensate for lines above and below...
-    if ( lineFromFirstLine < pos.line + 2 ){
-      cm.setCursor(lineFromFirstLine - 2, 0);
+    if ( lineFromFirstLine < pos.line + 3 ){
+      cm.setCursor(lineFromFirstLine - 3, 0);
     }
   }
 
