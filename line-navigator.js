@@ -26,37 +26,58 @@
 (function() {
 
 
-  var noop = function() {
-  }
-
-
-  var cmCmd = {
-    _goWordLeft: CodeMirror.commands.goWordLeft || noop,
-    _goWordRight: CodeMirror.commands.goWordRight || noop,
-    _goWordBoundaryLeft: CodeMirror.commands.goWordBoundaryLeft || noop,
-    _goWordBoundaryRight: CodeMirror.commands.goWordBoundaryRight || noop
-  };
-
-
   /**
   *  Register lineNavigator.  Currently, this is a logic for document type.
   *  But, what the plan to use the innerMode to adjust lineNavigation based
   *  on the type of data we are dealing with.  For example, markup can be
   *  processed differently than clike languages
   */
-  CodeMirror.defineOption("lineNavigator", true, _lineNavigator);
+  CodeMirror.defineOption("lineNavigator", true, lineNavigatorRegister);
 
-  function _lineNavigator(cm, val, old) {
-    if ( val === true && !(_lineNavigator.instance instanceof lineNavigator) ) {
-      _lineNavigator.instance = new lineNavigator(cm);
-      _lineNavigator.instance.register();
+
+  /**
+  * Function to wire up instances of CodeMirror with instances of lineNavigator
+  * Key events are per instance of CodeMirror...  This is primarily the driver
+  * for having multiple instances of lineNavigator.  CodeMirror commands are
+  * global, so there is no need for lineNavigator instances there.
+  */
+  function lineNavigatorRegister(cm, val, old) {
+
+    // Register new lineNavigator instance if we need one...
+    if ( val === true && !(cm._lineNavigator instanceof lineNavigator) ) {
+      cm._lineNavigator = new lineNavigator(cm);
+      cm._lineNavigator.register();
     }
-    else if ( val === false && _lineNavigator.instance instanceof lineNavigator ) {
-      _lineNavigator.instance.unregister();
-      delete _lineNavigator.instance;
+    // Destroy the lineNavigator
+    else if ( val === false && cm._lineNavigator instanceof lineNavigator ) {
+      cm._lineNavigator.unregister();
+      delete cm._lineNavigator;
     }
 
-    return _lineNavigator.instance;
+
+    if (!lineNavigatorRegister.registerGlobal){
+      // Take over the old word navigation system so that functionality that
+      // depends on word navigation can behave the same accross code mirror.
+      CodeMirror.commands.goWordLeft = CodeMirror.commands.goWordBoundaryLeft = lineNavigator.navigateLineLeft;
+      CodeMirror.commands.goWordRight = CodeMirror.commands.goWordBoundaryRight = lineNavigator.navigateLineRight;
+
+	  // Add scrollLineUp and scrollLineDown as commands in code mirror
+	  CodeMirror.commands.scrollLineUp = lineNavigator.scrollLineUp;
+	  CodeMirror.commands.scrollLineDown = lineNavigator.scrollLineDown;
+
+      lineNavigatorRegister.registerGlobal = true;
+
+      /* I don't have an event to register with in order to restore the
+      *  global commands in code mirror...
+      // Restore the old word navigation system
+      CodeMirror.commands.goWordLeft = cmCmd._goWordLeft;
+      CodeMirror.commands.goWordRight = cmCmd._goWordRight;
+      CodeMirror.commands.goWordBoundaryLeft = cmCmd._goWordBoundaryLeft;
+      CodeMirror.commands.goWordBoundaryRight = cmCmd._goWordBoundaryRight;
+      */
+    }
+
+    return cm._lineNavigator;
   }
 
 
@@ -65,6 +86,22 @@
   */
   function lineNavigator(cm) {
     this.cm = cm;
+  }
+
+
+  lineNavigator.prototype.register = function() {
+    // Register key events
+    this.cm.addKeyMap({
+      name: "lineNavigator",
+      "Ctrl-Down": lineNavigator.scrollLineDown,
+      "Ctrl-Up": lineNavigator.scrollLineUp
+    });
+  }
+
+
+  lineNavigator.prototype.unregister = function() {
+    // Unregister key events
+    this.cm.removeKeyMap("lineNavigator");
   }
 
 
@@ -78,40 +115,7 @@
   };
 
 
-  lineNavigator.prototype.register = function() {
-      var _self = this;
-
-      // Take over the old word navigation system so that functionality that
-      // depends on word navigation can behave the same accross code mirror.
-      CodeMirror.commands.goWordLeft = CodeMirror.commands.goWordBoundaryLeft = this.navigateLineLeft;
-      CodeMirror.commands.goWordRight = CodeMirror.commands.goWordBoundaryRight = this.navigateLineRight;
-
-	  // Add scrollLineUp and scrollLineDown as commands in code mirror
-	  CodeMirror.commands.scrollLineUp = this.scrollLineUp;
-	  CodeMirror.commands.scrollLineDown = this.scrollLineDown;
-
-      // Register key events
-      this.cm.addKeyMap({
-        name: "lineNavigator",
-        "Ctrl-Down": _self.scrollLineDown,
-        "Ctrl-Up": _self.scrollLineUp
-      });
-  }
-
-
-  lineNavigator.prototype.unregister = function() {
-    // Unregister key events
-    this.cm.removeKeyMap("lineNavigator");
-
-    // Restore the old word navigation system
-    CodeMirror.commands.goWordLeft = cmCmd._goWordLeft;
-    CodeMirror.commands.goWordRight = cmCmd._goWordRight;
-    CodeMirror.commands.goWordBoundaryLeft = cmCmd._goWordBoundaryLeft;
-    CodeMirror.commands.goWordBoundaryRight = cmCmd._goWordBoundaryRight;
-  }
-
-
-  lineNavigator.prototype.scrollLineUp = function (cm) {
+  lineNavigator.scrollLineUp = function (cm) {
     var pos = cm.getCursor(), line = cm.lineInfo(pos.line);
     var scrollInfo = cm.getScrollInfo();
     var lineFromFirstLine = Math.round((scrollInfo.top + scrollInfo.clientHeight)/line.handle.height);
@@ -124,7 +128,7 @@
   }
 
 
-  lineNavigator.prototype.scrollLineDown = function (cm) {
+  lineNavigator.scrollLineDown = function (cm) {
     var pos = cm.getCursor(), line = cm.lineInfo(pos.line);
     var scrollInfo = cm.getScrollInfo();
     var lineFromFirstLine = Math.round(scrollInfo.top/line.handle.height);
@@ -140,7 +144,7 @@
   *  Line Navigation logic.  There are some parts that have been extracted out of
   *  the implementation to goWordLeft and goWordRight.
   */
-  lineNavigator.prototype.navigateLineRight = function (cm) {
+  lineNavigator.navigateLineRight = function (cm) {
     var dir = {
       left: lineNavigator.direction.left,
       right: lineNavigator.direction.right
@@ -202,7 +206,7 @@
 
 
 
-  lineNavigator.prototype.navigateLineLeft = function (cm) {
+  lineNavigator.navigateLineLeft = function (cm) {
     var dir = {
       left: lineNavigator.direction.left,
       right: lineNavigator.direction.right
