@@ -23,10 +23,20 @@
  */
 
 
- (function() {
+(function() {
 
 
-  var _goWordLeft = CodeMirror.commands.goWordLeft, _goWordRight = CodeMirror.commands.goWordRight;
+  var noop = function() {
+  }
+
+
+  var cmCmd = {
+    _goWordLeft: CodeMirror.commands.goWordLeft || noop,
+    _goWordRight: CodeMirror.commands.goWordRight || noop,
+    _goWordBoundaryLeft: CodeMirror.commands.goWordBoundaryLeft || noop,
+    _goWordBoundaryRight: CodeMirror.commands.goWordBoundaryRight || noop
+  };
+
 
   /**
   *  Register lineNavigator.  Currently, this is a logic for document type.
@@ -34,48 +44,74 @@
   *  on the type of data we are dealing with.  For example, markup can be
   *  processed differently than clike languages
   */
-  CodeMirror.defineOption("lineNavigator", false, function(cm, val, old) {
+  CodeMirror.defineOption("lineNavigator", true, _lineNavigator);
 
-    if ( val ){
-      // Take over the old word navigation system so that functionality that
-      // depends on word navigation can behave the same accross code mirror.
-      CodeMirror.commands.goWordLeft = navigateLineLeft;
-      CodeMirror.commands.goWordRight = navigateLineRight;
-
-	  // Add scrollLineUp and scrollLineDown as commands in code mirror
-	  CodeMirror.commands.scrollLineUp = scrollLineUp;
-	  CodeMirror.commands.scrollLineDown = scrollLineDown;
-
-      cm.addKeyMap({
-        name: "lineNavigator",
-        "Ctrl-Down": scrollLineDown,
-        "Ctrl-Up": scrollLineUp
-      });
+  function _lineNavigator(cm, val, old) {
+    if ( val === true && !(_lineNavigator.instance instanceof lineNavigator) ) {
+      _lineNavigator.instance = new lineNavigator(cm);
+      _lineNavigator.instance.register();
     }
-    else {
-     cm.removeKeyMap("lineNavigator");
-
-      // Restore the old word navigation system
-      CodeMirror.commands.goWordLeft = _goWordLeft;
-      CodeMirror.commands.goWordRight = _goWordRight;
+    else if ( val === false && _lineNavigator.instance instanceof lineNavigator ) {
+      _lineNavigator.instance.unregister();
+      delete _lineNavigator.instance;
     }
 
-  });
+    return _lineNavigator.instance;
+  }
 
 
-  var navigateDirection = {
+  /**
+  * @constructor
+  */
+  function lineNavigator(cm) {
+    this.cm = cm;
+  }
+
+
+  lineNavigator.direction = {
     "left": {
-      charCmd: "goCharLeft",
-      wordCmd: "goWordLeft"
+      charCmd: "goCharLeft"
     },
     "right": {
-      charCmd: "goCharRight",
-      wordCmd: "goWordRight"
+      charCmd: "goCharRight"
     }
   };
 
 
-  function scrollLineUp(cm) {
+  lineNavigator.prototype.register = function() {
+      var _self = this;
+
+      // Take over the old word navigation system so that functionality that
+      // depends on word navigation can behave the same accross code mirror.
+      CodeMirror.commands.goWordLeft = CodeMirror.commands.goWordBoundaryLeft = this.navigateLineLeft;
+      CodeMirror.commands.goWordRight = CodeMirror.commands.goWordBoundaryRight = this.navigateLineRight;
+
+	  // Add scrollLineUp and scrollLineDown as commands in code mirror
+	  CodeMirror.commands.scrollLineUp = this.scrollLineUp;
+	  CodeMirror.commands.scrollLineDown = this.scrollLineDown;
+
+      // Register key events
+      this.cm.addKeyMap({
+        name: "lineNavigator",
+        "Ctrl-Down": _self.scrollLineDown,
+        "Ctrl-Up": _self.scrollLineUp
+      });
+  }
+
+
+  lineNavigator.prototype.unregister = function() {
+    // Unregister key events
+    this.cm.removeKeyMap("lineNavigator");
+
+    // Restore the old word navigation system
+    CodeMirror.commands.goWordLeft = cmCmd._goWordLeft;
+    CodeMirror.commands.goWordRight = cmCmd._goWordRight;
+    CodeMirror.commands.goWordBoundaryLeft = cmCmd._goWordBoundaryLeft;
+    CodeMirror.commands.goWordBoundaryRight = cmCmd._goWordBoundaryRight;
+  }
+
+
+  lineNavigator.prototype.scrollLineUp = function (cm) {
     var pos = cm.getCursor(), line = cm.lineInfo(pos.line);
     var scrollInfo = cm.getScrollInfo();
     var lineFromFirstLine = Math.round((scrollInfo.top + scrollInfo.clientHeight)/line.handle.height);
@@ -88,7 +124,7 @@
   }
 
 
-  function scrollLineDown(cm) {
+  lineNavigator.prototype.scrollLineDown = function (cm) {
     var pos = cm.getCursor(), line = cm.lineInfo(pos.line);
     var scrollInfo = cm.getScrollInfo();
     var lineFromFirstLine = Math.round(scrollInfo.top/line.handle.height);
@@ -104,8 +140,12 @@
   *  Line Navigation logic.  There are some parts that have been extracted out of
   *  the implementation to goWordLeft and goWordRight.
   */
-  function navigateLineRight(cm) {
-    var dir = navigateDirection.right;
+  lineNavigator.prototype.navigateLineRight = function (cm) {
+    var dir = {
+      left: lineNavigator.direction.left,
+      right: lineNavigator.direction.right
+    };
+
     var currPos = { line: -1 }, line;
     var characters = new charHandlers();
 
@@ -124,7 +164,7 @@
       var _handler = characters.getHandler(_char);
 
       // If we have a white, we will simply go to the next character...
-      if ( _handler.type === "space" ){
+      if ( _handler.type === "space" ) {
       }
       else if (_handler.type === "empty" ) {
         // This empty handler is rather important because this is where
@@ -156,19 +196,23 @@
         }
       }
 
-      cm.execCommand(dir.charCmd);
+      cm.execCommand(dir.right.charCmd);
     }
   }
 
 
 
-  function navigateLineLeft(cm) {
-    var dir = navigateDirection.left;
+  lineNavigator.prototype.navigateLineLeft = function (cm) {
+    var dir = {
+      left: lineNavigator.direction.left,
+      right: lineNavigator.direction.right
+    };
+
     var currPos = { line: -1 }, line;
     var characters = new charHandlers();
 
     for (;;) {
-      cm.execCommand(dir.charCmd);
+      cm.execCommand(dir.left.charCmd);
 
       var pos = cm.getCursor();
 
@@ -186,7 +230,7 @@
       if ( _handler.type === "space" ) {
         // We only exit if we have seen any characters...
         if ( characters.handlers.character.count || characters.handlers.delimeter.count ) {
-          cm.execCommand(navigateDirection.right.charCmd);
+          cm.execCommand(dir.right.charCmd);
           break;
         }
       }
@@ -195,13 +239,13 @@
       else if ( _handler.type === "delimeter" ) {
         // We only exit if we have seen any characters...
         if ( characters.handlers.character.count ) {
-          cm.execCommand(navigateDirection.right.charCmd);
+          cm.execCommand(dir.right.charCmd);
           break;
         }
       }
       else if ( _handler.type === "character" ) {
         if ( characters.handlers.delimeter.count ) {
-          cm.execCommand(navigateDirection.right.charCmd);
+          cm.execCommand(dir.right.charCmd);
           break;
         }
       }
@@ -214,31 +258,22 @@
       empty: {
         count: 0,
         type: 'empty',
-        test: function(str){
-            str = str || "";
-            return str.length === 0;
-        }
+        is: charTest.empty.test
       },
       space: {
         count: 0,
         type: 'space',
-        test: function(str) {
-          return /[\s\t\r\n\v]/.test(str);
-        }
+        is: charTest.whiteSpace.test
       },
       delimeter: {
         count: 0,
         type: 'delimeter',
-        test: function(str) {
-          return /[.:;(){}\/\"',+\-*&%=<>!?|~^]/.test(str);
-        }
+        is: charTest.delimeter.test
       },
       character: {
         count: 0,
         type: 'character',
-        test: function(str) {
-          return isWordChar(str);
-        }
+        is: charTest.wordChar.test
       }
     };
   }
@@ -247,7 +282,7 @@
   charHandlers.prototype.getHandler = function (str) {
     for ( var handler in this.handlers ) {
       var _handler = this.handlers[handler];
-      if ( _handler.test(str) ) {
+      if ( _handler.is(str) ) {
         _handler.count++;
         return _handler;
       }
@@ -255,6 +290,37 @@
 
     return this.handlers.delimeter;
   }
+
+
+  //
+  // Tester functions...
+  //
+  var charTest = {
+    empty: {
+      test: function(str){
+        str = str || "";
+        return str.length === 0;
+      }
+    },
+    whiteSpace: {
+      _regex: /[\s\t\r\n\v]/,
+      test: function(str) {
+        return charTest.whiteSpace._regex.test(str);
+      }
+    },
+    delimeter: {
+      _regex: /[.:;(){}\/\"',+\-*&%=<>!?|~^]/,
+      test: function(str) {
+        return charTest.delimeter._regex.test(str);
+      }
+    },
+    wordChar: {
+      test: function(str) {
+        return isWordChar(str);
+      }
+    }
+  };
+
 
 
   /** Directly from codemirror.js */
