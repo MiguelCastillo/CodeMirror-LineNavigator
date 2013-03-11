@@ -194,8 +194,8 @@
         }
       }
       else if ( _handler.type === "character" ) {
-        // We exit if we have seen a delimeter or a whitespace
-        if ( characters.handlers.delimeter.count || characters.handlers.space.count ) {
+        // We exit if we have seen a delimeter or a whitespace or an empty line
+        if ( characters.handlers.delimeter.count || characters.handlers.space.count || characters.handlers.empty.count ) {
           break;
         }
       }
